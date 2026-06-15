@@ -1,161 +1,234 @@
 // --- Seleção de Elementos do DOM ---
-const mainTitle = document.getElementById('mainTitle'); // Novo elemento selecionado
+const mainTitle = document.getElementById('mainTitle');
 const todoForm = document.getElementById('todoForm');
 const todoInput = document.getElementById('todoInput');
 const todoList = document.getElementById('todoList');
+const completedList = document.getElementById('completedList');
 const deletedList = document.getElementById('deletedList');
 
-// --- Estado da Aplicação (Lendo dados salvos em JSON no LocalStorage) ---
-let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+// --- Estado da Aplicação (3 Arrays lidos do LocalStorage em JSON) ---
+let pendingTasks = JSON.parse(localStorage.getItem('pendingTasks')) || [];
+let completedTasks = JSON.parse(localStorage.getItem('completedTasks')) || [];
 let deletedTasks = JSON.parse(localStorage.getItem('deletedTasks')) || [];
 
-// --- Funções de Manipulação e Armazenamento ---
+// --- Funções de Armazenamento e Inicialização ---
 
-// Atualiza o título principal com a data de hoje formatada (DD/MM/AAAA)
 function updateMainTitleDate() {
     const now = new Date();
     const formattedDate = now.toLocaleDateString('pt-BR');
     mainTitle.textContent = `Tarefas do dia ${formattedDate}`;
 }
 
-// Converte os dados para JSON e armazena no navegador
 function saveToLocalStorage() {
-    localStorage.setItem('tasks', JSON.stringify(tasks));
+    localStorage.setItem('pendingTasks', JSON.stringify(pendingTasks));
+    localStorage.setItem('completedTasks', JSON.stringify(completedTasks));
     localStorage.setItem('deletedTasks', JSON.stringify(deletedTasks));
 }
 
-// Renderiza todas as listas da interface e atualiza o armazenamento
 function renderAll() {
-    renderActiveTasks();
-    renderDeletedTasks();
+    renderPendingActive();
+    renderCompletedActive();
+    renderDeletedActive();
     saveToLocalStorage();
 }
 
-// Renderiza a lista superior de tarefas ativas
-function renderActiveTasks() {
+// --- Funções de Renderização Dinâmica ---
+
+// 1. Renderiza Card de Pendentes
+function renderPendingActive() {
     todoList.innerHTML = '';
+    pendingTasks.forEach((task, index) => {
+        const li = createBaseTaskElement(task, false);
 
-    tasks.forEach((task, index) => {
-        const li = document.createElement('li');
-        li.className = 'todo-item';
-
-        const contentDiv = document.createElement('div');
-        contentDiv.className = 'todo-content';
-        
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.checked = task.done;
-
-        const detailsDiv = document.createElement('div');
-        detailsDiv.className = 'task-details';
-
-        const spanText = document.createElement('span');
-        spanText.className = 'todo-text';
-        spanText.textContent = task.text;
-        
-        if (task.done) {
-            spanText.classList.add('completed');
-        }
-
-        const spanMeta = document.createElement('span');
-        spanMeta.className = 'task-meta';
-        spanMeta.textContent = `Criada em: ${task.createdAt}`;
-
-        detailsDiv.appendChild(spanText);
-        detailsDiv.appendChild(spanMeta);
-
-        contentDiv.appendChild(checkbox);
-        contentDiv.appendChild(detailsDiv);
+        // Ações da direita
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'task-actions';
 
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'btn-delete';
         deleteBtn.textContent = 'Deletar';
 
-        li.appendChild(contentDiv);
-        li.appendChild(deleteBtn);
+        actionsDiv.appendChild(deleteBtn);
+        li.appendChild(actionsDiv);
         todoList.appendChild(li);
-        
-        contentDiv.addEventListener('click', () => {
-            toggleTask(index);
+
+        // Cliques específicos de Pendentes
+        li.querySelector('.todo-content').addEventListener('click', () => {
+            moveToCompleted(index); // Move automático ao clicar para marcar
         });
 
         deleteBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            archiveTask(index);
+            moveToDeleted(index, 'pending');
         });
     });
 }
 
-// Renderiza a lista inferior de tarefas arquivadas/excluídas
-function renderDeletedTasks() {
+// 2. Renderiza Card de Concluídas
+function renderCompletedActive() {
+    completedList.innerHTML = '';
+    completedTasks.forEach((task, index) => {
+        const li = createBaseTaskElement(task, true);
+
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'task-actions';
+
+        const reloadBtn = document.createElement('button');
+        reloadBtn.className = 'btn-reload';
+        reloadBtn.textContent = '🔄'; // Símbolo de reload
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn-delete';
+        deleteBtn.textContent = 'Deletar';
+
+        actionsDiv.appendChild(reloadBtn);
+        actionsDiv.appendChild(deleteBtn);
+        li.appendChild(actionsDiv);
+        completedList.appendChild(li);
+
+        // Cliques específicos de Concluídas
+        li.querySelector('.todo-content').addEventListener('click', () => {
+            returnToPending(index, 'completed'); // Desmarcar joga de volta pra pendentes
+        });
+
+        reloadBtn.addEventListener('click', () => {
+            returnToPending(index, 'completed');
+        });
+
+        deleteBtn.addEventListener('click', () => {
+            moveToDeleted(index, 'completed');
+        });
+    });
+}
+
+// 3. Renderiza Card de Excluídas
+function renderDeletedActive() {
     deletedList.innerHTML = '';
-
     deletedTasks.forEach((task, index) => {
-        const li = document.createElement('li');
-        li.className = 'deleted-item';
+        const li = createBaseTaskElement(task, true);
 
-        const infoDiv = document.createElement('div');
-        infoDiv.className = 'task-details';
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'task-actions';
 
-        const spanText = document.createElement('span');
-        spanText.className = 'deleted-text';
-        spanText.textContent = task.text;
-
-        const spanTime = document.createElement('span');
-        spanTime.className = 'deleted-time';
-        spanTime.textContent = `Criada em: ${task.createdAt} | Concluída em: ${task.dateString}`;
-
-        infoDiv.appendChild(spanText);
-        infoDiv.appendChild(spanTime);
+        const reloadBtn = document.createElement('button');
+        reloadBtn.className = 'btn-reload';
+        reloadBtn.textContent = '🔄';
 
         const finalDeleteBtn = document.createElement('button');
         finalDeleteBtn.className = 'btn-delete';
         finalDeleteBtn.textContent = 'Deletar';
 
-        li.appendChild(infoDiv);
-        li.appendChild(finalDeleteBtn);
+        actionsDiv.appendChild(reloadBtn);
+        actionsDiv.appendChild(finalDeleteBtn);
+        li.appendChild(actionsDiv);
         deletedList.appendChild(li);
 
+        // Cliques específicos de Excluídas
+        reloadBtn.addEventListener('click', () => {
+            returnToPending(index, 'deleted'); // Resgata tarefa das excluídas
+        });
+
         finalDeleteBtn.addEventListener('click', () => {
-            deletePermanently(index);
+            deletePermanently(index); // Sone da tela para sempre
         });
     });
 }
 
-// Adiciona nova tarefa ativa
+// Auxiliar para gerar a estrutura base repetitiva de texto e checkboxes
+function createBaseTaskElement(task, isFinished) {
+    const li = document.createElement('li');
+    li.className = 'todo-item';
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'todo-content';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = isFinished;
+
+    const detailsDiv = document.createElement('div');
+    detailsDiv.className = 'task-details';
+
+    const spanText = document.createElement('span');
+    spanText.className = 'todo-text';
+    spanText.textContent = task.text;
+
+    if (isFinished) {
+        spanText.classList.add('completed-text');
+    }
+
+    const spanMeta = document.createElement('span');
+    spanMeta.className = 'task-meta';
+    
+    // Constrói o texto do rodapé dependendo dos carimbos que a tarefa possui
+    let metaText = `Criada em: ${task.createdAt}`;
+    if (task.dateString) {
+        metaText += ` | Concluída em: ${task.dateString}`;
+    }
+    spanMeta.textContent = metaText;
+
+    detailsDiv.appendChild(spanText);
+    detailsDiv.appendChild(spanMeta);
+    contentDiv.appendChild(checkbox);
+    contentDiv.appendChild(detailsDiv);
+    li.appendChild(contentDiv);
+
+    return li;
+}
+
+// --- Funções de Fluxo de Mudança de Arrays ---
+
 function addTask(text) {
     const now = new Date();
     const formattedCreatedDate = now.toLocaleString('pt-BR');
 
     const newTask = {
         text: text,
-        done: false,
-        createdAt: formattedCreatedDate
+        createdAt: formattedCreatedDate,
+        dateString: null
     };
-    tasks.push(newTask);
+    pendingTasks.push(newTask);
     renderAll();
 }
 
-function toggleTask(index) {
-    tasks[index].done = !tasks[index].done;
-    renderAll();
-}
-
-// Move a tarefa para a lista inferior (Histórico)
-function archiveTask(index) {
+function moveToCompleted(index) {
     const now = new Date();
-    const formattedDate = now.toLocaleString('pt-BR');
-
-    const [removedTask] = tasks.splice(index, 1);
-
-    removedTask.done = true;
-    removedTask.dateString = formattedDate;
-    
-    deletedTasks.push(removedTask);
+    const [task] = pendingTasks.splice(index, 1);
+    task.dateString = now.toLocaleString('pt-BR'); // Carimba conclusão
+    completedTasks.push(task);
     renderAll();
 }
 
-// Remove o item permanentemente do histórico de excluídos
+function returnToPending(index, origin) {
+    let task;
+    if (origin === 'completed') {
+        [task] = completedTasks.splice(index, 1);
+    } else if (origin === 'deleted') {
+        [task] = deletedTasks.splice(index, 1);
+    }
+    task.dateString = null; // Remove o carimbo de conclusão
+    pendingTasks.push(task);
+    renderAll();
+}
+
+function moveToDeleted(index, origin) {
+    let task;
+    if (origin === 'pending') {
+        [task] = pendingTasks.splice(index, 1);
+    } else if (origin === 'completed') {
+        [task] = completedTasks.splice(index, 1);
+    }
+    
+    // Se veio direto de pendentes sem hora de conclusão, coloca o momento atual
+    if (!task.dateString) {
+        const now = new Date();
+        task.dateString = now.toLocaleString('pt-BR');
+    }
+    
+    deletedTasks.push(task);
+    renderAll();
+}
+
 function deletePermanently(index) {
     deletedTasks.splice(index, 1);
     renderAll();
@@ -164,7 +237,6 @@ function deletePermanently(index) {
 // --- EventListeners Globais ---
 todoForm.addEventListener('submit', (event) => {
     event.preventDefault();
-    
     const taskText = todoInput.value.trim();
     if (taskText !== '') {
         addTask(taskText);
@@ -174,5 +246,5 @@ todoForm.addEventListener('submit', (event) => {
 });
 
 // --- Inicialização ---
-updateMainTitleDate(); // Define a data do dia no cabeçalho
-renderAll();          // Exibe os dados salvos do LocalStorage
+updateMainTitleDate();
+renderAll();
