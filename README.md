@@ -5,7 +5,7 @@ Uma aplicação de lista de tarefas (To-Do List) de tela única, moderna, focada
 ## 🚀 Demonstração
 
 
-▶️ **[Você pode visualizar o projeto em execução aqui:](https://kernelpanic-404.github.io/daytrack-todo/)**
+▶️ **[Você pode visualizar o projeto em execução aqui:](https://thaistardys.github.io/daytrack-todo/)**
 
 
 ---
